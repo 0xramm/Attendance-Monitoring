@@ -1,7 +1,10 @@
 from flask import Flask, request, jsonify,make_response 
 from pwMod import fetch_att
+import time
 
 app = Flask(__name__)
+MAX_RETRIES = 3
+RETRY_DELAY = 1
 
 @app.route('/')
 def index():
@@ -22,8 +25,6 @@ def index():
     <h3>/attendance?username=YourRegNo&password=YourPassword</h3>
 </body>
 </html>
-
-
     '''
     return make_response(html_content)
 
@@ -36,11 +37,18 @@ def get_attendance():
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400
 
-    try:
-        student_name, percentage, end_date = fetch_att(username, password)
-        return jsonify({'student_name': student_name, 'percentage': percentage, 'Last Updated': end_date})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
+    attempt = 0
+    while attempt < MAX_RETRIES:
+        try:
+            student_name, percentage, end_date = fetch_att(username, password)
+            return jsonify({'student_name': student_name, 'percentage': percentage, 'Last Updated': end_date})
+        except Exception as e:
+            attempt += 1
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY)
+            else:
+                return jsonify({'error': str(e)}), 500
+    return jsonify({'error': 'Unexpected error'}), 500
+    
 if __name__ == '__main__':
     app.run(host='0.0.0.0',port=3001)
